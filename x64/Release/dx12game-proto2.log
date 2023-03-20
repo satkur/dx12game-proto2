@@ -1,3 +1,0 @@
-﻿  main.cpp
-C:\Peculium\source\dx12game-proto2\main.cpp(34,30): error C2065: 'windowProcedure': 定義されていない識別子です。
-C:\Peculium\source\dx12game-proto2\main.cpp(76,13): error C3861: 'getchar': 識別子が見つかりませんでした
