@@ -29,9 +29,12 @@ void debugOutputFormatString(const char* format, ...) {
 const unsigned int window_width = 1280;
 const unsigned int window_height = 720;
 
-ID3D12Device* _pDevice = nullptr;
-IDXGIFactory6* _pDXGIFactory = nullptr;
-IDXGISwapChain4* _pDXGISwapChain = nullptr;
+ID3D12Device* _device = nullptr;
+IDXGIFactory6* _dxgiFactory = nullptr;
+IDXGISwapChain4* _dxgiSwapChain = nullptr;
+ID3D12CommandAllocator* _cmdAllocator = nullptr;
+ID3D12GraphicsCommandList* _cmdList = nullptr;
+ID3D12CommandQueue* _cmdQueue = nullptr;
 
 LRESULT windowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     if (msg == WM_DESTROY) {
@@ -76,19 +79,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #pragma region DirectX12 initialization
 
     // create dxgi factory
-    auto result = CreateDXGIFactory1(IID_PPV_ARGS(&_pDXGIFactory));
+    auto result = CreateDXGIFactory1(IID_PPV_ARGS(&_dxgiFactory));
     
     // enumerate adapters by dxgi factory
     std::vector<IDXGIAdapter*> adapters;
     IDXGIAdapter* adapterCache = nullptr;
     for (int i = 0;
-         _pDXGIFactory->EnumAdapters(i, &adapterCache) != DXGI_ERROR_NOT_FOUND;
+         _dxgiFactory->EnumAdapters(i, &adapterCache) != DXGI_ERROR_NOT_FOUND;
          i++
     ) {
         adapters.push_back(adapterCache);
     }
 
     // find desired adapter
+    // TODO ‹­§“I‚ÉNVIDIA‚ðŽw’è‚µ‚Ä‚¢‚é
     auto targetAdapterName = L"NVIDIA";
     for (auto adapter : adapters) {
         DXGI_ADAPTER_DESC desc = {};
@@ -101,7 +105,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             break;
         }
     }
-
     
     // feature levels
     D3D_FEATURE_LEVEL featureLevels[] = {
@@ -114,14 +117,65 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // init device
     D3D_FEATURE_LEVEL featureLevel;
     for (auto lv : featureLevels) {
-        if (D3D12CreateDevice(
-            nullptr,
-            lv, IID_PPV_ARGS(&_pDevice)) == S_OK
-        ) {
+        result = D3D12CreateDevice(
+            adapterCache,
+            lv, IID_PPV_ARGS(&_device));
+        if (result == S_OK) {
             featureLevel = lv;
             break;
         }
     }
+
+    // create command allocator
+    result = _device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&_cmdAllocator));
+    // create command list
+    result = _device->CreateCommandList(
+        0,
+        D3D12_COMMAND_LIST_TYPE_DIRECT,
+        _cmdAllocator,
+        nullptr,
+        IID_PPV_ARGS(&_cmdList)
+    );
+
+    // create command queue
+    D3D12_COMMAND_QUEUE_DESC cmdQueueDesc = {};
+    cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+    cmdQueueDesc.NodeMask = 0;
+    cmdQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+    cmdQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+
+    result = _device->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&_cmdQueue));
+
+    // create swap chain
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+    swapChainDesc.Width = window_width;
+    swapChainDesc.Height = window_height;
+    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.Stereo = false;
+    swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.SampleDesc.Quality = 0;
+    swapChainDesc.BufferUsage = DXGI_USAGE_BACK_BUFFER;
+    swapChainDesc.BufferCount = 2;
+    swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+    swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+
+    IDXGISwapChain1* dxgiSwapChain1;
+    result = _dxgiFactory->CreateSwapChainForHwnd(
+        _cmdQueue,
+        hwnd,
+        &swapChainDesc,
+        nullptr, nullptr,
+        &dxgiSwapChain1
+    );
+    // cast to DXGISwapChain4
+    result = dxgiSwapChain1->QueryInterface(IID_PPV_ARGS(&_dxgiSwapChain));
+    if (result == S_OK)
+        dxgiSwapChain1->Release();
+
+
+    
 #pragma endregion
 
     // show
