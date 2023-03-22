@@ -5,6 +5,7 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <vector>
+#include <wrl.h>
 #ifdef _DEBUG
 #include <iostream>
 #endif
@@ -13,6 +14,8 @@
 #pragma comment(lib, "dxgi.lib")
 
 using namespace std;
+using Microsoft::WRL::ComPtr;
+
 
 // @brief コンソール画面に文字列を表示する
 // @remarks デバッグ用
@@ -29,12 +32,12 @@ void debugOutputFormatString(const char* format, ...) {
 const unsigned int window_width = 1280;
 const unsigned int window_height = 720;
 
-ID3D12Device* _device = nullptr;
-IDXGIFactory6* _dxgiFactory = nullptr;
-IDXGISwapChain4* _dxgiSwapChain = nullptr;
-ID3D12CommandAllocator* _cmdAllocator = nullptr;
-ID3D12GraphicsCommandList* _cmdList = nullptr;
-ID3D12CommandQueue* _cmdQueue = nullptr;
+ComPtr<ID3D12Device> _device = nullptr;
+ComPtr<IDXGIFactory6> _dxgiFactory = nullptr;
+ComPtr<IDXGISwapChain4> _dxgiSwapChain = nullptr;
+ComPtr<ID3D12CommandAllocator> _cmdAllocator = nullptr;
+ComPtr<ID3D12GraphicsCommandList> _cmdList = nullptr;
+ComPtr<ID3D12CommandQueue> _cmdQueue = nullptr;
 
 LRESULT windowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     if (msg == WM_DESTROY) {
@@ -79,7 +82,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #pragma region DirectX12 initialization
 
     // create dxgi factory
-    auto result = CreateDXGIFactory1(IID_PPV_ARGS(&_dxgiFactory));
+    auto result = CreateDXGIFactory1(IID_PPV_ARGS(_dxgiFactory.ReleaseAndGetAddressOf()));
     
     // enumerate adapters by dxgi factory
     std::vector<IDXGIAdapter*> adapters;
@@ -119,7 +122,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     for (auto lv : featureLevels) {
         result = D3D12CreateDevice(
             adapterCache,
-            lv, IID_PPV_ARGS(&_device));
+            lv, IID_PPV_ARGS(_device.ReleaseAndGetAddressOf()));
         if (result == S_OK) {
             featureLevel = lv;
             break;
@@ -127,12 +130,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     }
 
     // create command allocator
-    result = _device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&_cmdAllocator));
+    result = _device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(_cmdAllocator.ReleaseAndGetAddressOf()));
     // create command list
     result = _device->CreateCommandList(
         0,
         D3D12_COMMAND_LIST_TYPE_DIRECT,
-        _cmdAllocator,
+        _cmdAllocator.Get(),
         nullptr,
         IID_PPV_ARGS(&_cmdList)
     );
@@ -144,7 +147,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     cmdQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
     cmdQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
-    result = _device->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&_cmdQueue));
+    result = _device->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(_cmdQueue.ReleaseAndGetAddressOf()));
 
     // create swap chain
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
@@ -161,18 +164,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
     swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
-    IDXGISwapChain1* dxgiSwapChain1;
+    ComPtr<IDXGISwapChain1> dxgiSwapChain1;
     result = _dxgiFactory->CreateSwapChainForHwnd(
-        _cmdQueue,
+        _cmdQueue.Get(),
         hwnd,
         &swapChainDesc,
         nullptr, nullptr,
-        &dxgiSwapChain1
+        dxgiSwapChain1.ReleaseAndGetAddressOf()
     );
     // cast to DXGISwapChain4
-    result = dxgiSwapChain1->QueryInterface(IID_PPV_ARGS(&_dxgiSwapChain));
-    if (result == S_OK)
-        dxgiSwapChain1->Release();
+    result = dxgiSwapChain1->QueryInterface(IID_PPV_ARGS(_dxgiSwapChain.ReleaseAndGetAddressOf()));
 
 
     
